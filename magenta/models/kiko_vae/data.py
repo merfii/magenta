@@ -55,6 +55,8 @@ OUTPUT_VELOCITY = 80
 
 CHORD_SYMBOL = music_pb2.NoteSequence.TextAnnotation.CHORD_SYMBOL
 
+np.set_printoptions(threshold=np.inf)
+
 
 def _maybe_pad_seqs(seqs, dtype):
   """Pads sequences to match the longest and returns as a numpy array."""
@@ -348,6 +350,9 @@ class BaseConverter(object):
       lengths: A tf.int32 Tensor, shaped [num encoded seqs], containing the
         unpadded lengths of the tensor sequences resulting from the input.
     """
+    
+    print("tf2Tensors")
+    tf.logging.info('tf2Tensors')
     def _convert_and_pad(item_str):
       item = self.str_to_item_fn(item_str)
       tensors = self.to_tensors(item)
@@ -751,9 +756,10 @@ class DrumsConverter(BaseNoteSequenceConverter):
 
   def __init__(self, max_bars=None, slice_bars=None, gap_bars=1.0,
                pitch_classes=None, add_end_token=False, steps_per_quarter=4,
-               quarters_per_bar=4, pad_to_total_time=False, roll_input=False,
+               quarters_per_bar=4, pad_to_total_time=False, roll_input=False,   
                roll_output=False, max_tensors_per_notesequence=5,
                presplit_on_time_changes=True):
+      
     self._pitch_classes = pitch_classes or REDUCED_DRUM_PITCH_CLASSES
     self._pitch_class_map = {
         p: i for i, pitches in enumerate(self._pitch_classes) for p in pitches}
@@ -805,6 +811,10 @@ class DrumsConverter(BaseNoteSequenceConverter):
     except (mm.BadTimeSignatureException, mm.NonIntegerStepsPerBarException,
             mm.NegativeTimeException) as e:
       return ConverterTensors()
+
+#************************************************
+#    tf.logging.info('_to_tensors')
+#************************************************
 
     new_notes = []
     for n in quantized_sequence.notes:
@@ -863,7 +873,14 @@ class DrumsConverter(BaseNoteSequenceConverter):
 
     output_seqs = rolls if self._roll_output else oh_vecs
 
-    return ConverterTensors(inputs=input_seqs, outputs=output_seqs)
+    _input_seqs = []
+    for inn in input_seqs:
+        _input_seqs.append(inn)
+        for ii in _input_seqs[-1]:
+            ii[1:9] = False
+            #print(str(ii))
+    
+    return ConverterTensors(inputs=_input_seqs, outputs=output_seqs)
 
   def _to_notesequences(self, samples):
     output_sequences = []
@@ -1191,8 +1208,7 @@ def get_dataset(
   if note_sequence_augmenter is not None:
     dataset = dataset.map(note_sequence_augmenter.tf_augment)
   dataset = (dataset
-             .map(data_converter.tf_to_tensors,
-                  num_parallel_calls=num_threads)
+             .map(data_converter.tf_to_tensors,num_parallel_calls=num_threads)
              .flat_map(lambda *t: tf.data.Dataset.from_tensor_slices(t))
              .map(_remove_pad_fn))
   if is_training:
